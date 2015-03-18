@@ -17,6 +17,7 @@ type state = {
                     int (* cause clause *)) Dynarray.t;
       (* Si "cause clause" est -1, alors il s'agit
          d'une décision, non d'une conséquence *)
+  propagation_bt: int Dynarray.t;
   mutable decision_level: int;
   mutable conflicting_clause: int;
 
@@ -121,6 +122,7 @@ let init_state ((nvars, nclauses, clauses): Cnf.t): state =
   let clauses_of_wl = LitArray.fmake nvars (fun () -> Dynarray.make 0 0) in
 
   let propagation_log = Dynarray.make 0 (0, -1) in
+  let propagation_bt = Dynarray.make 0 0 in
   
   let lit_activity = LitArray.make nvars 0. in
   for i = 0 to nclauses - 1 do
@@ -140,6 +142,7 @@ let init_state ((nvars, nclauses, clauses): Cnf.t): state =
       queue = Queue.create ();
 
       propagation_log;
+      propagation_bt;
       decision_level = 0;
       conflicting_clause = -1;
     
@@ -173,6 +176,9 @@ let rec propagate (st: state): bool =
     | -1 -> true
     | 1 -> st.conflicting_clause <- cl_cause; false
     | _ (* 0 *) ->
+      if cl_cause = -1 then
+        Dynarray.push_back st.propagation_bt (Dynarray.length st.propagation_log)
+        |> ignore;
       Dynarray.push_back st.propagation_log (-v, cl_cause) |> ignore;
       Bt.set st.assign v (-1);
       
@@ -434,13 +440,8 @@ let cdcl (st: state): outcome =
           (* nettoyage *)
           st.conflicting_clause <- (-1);
           
-          let steps = ref bt_steps in
-          let i = ref (Dynarray.length st.propagation_log - 1) in
-          while !steps > 0 do (* todo: optimiser ça en maintenant un tableau des indices des décisions *)
-            if snd @@ Dynarray.get st.propagation_log !i = -1 then
-              decr steps;
-            decr i
-          done;
+          let i = ref (Dynarray.get st.propagation_bt (Dynarray.length st.propagation_bt - bt_steps)) in
+          Dynarray.shrink st.propagation_bt (Dynarray.length st.propagation_bt - bt_steps);
           Dynarray.shrink st.propagation_log (!i + 1);
           st.decision_level <- st.decision_level - bt_steps;
           Bt.pop_n_state st.assign bt_steps;
