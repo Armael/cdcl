@@ -461,7 +461,7 @@ let cdcl (st: state): outcome =
       done;
       Sat a
 
-
+(*
 let _ =
   let input_buf = dump_chan stdin in
   close_in stdin;
@@ -482,3 +482,4 @@ let _ =
       print_string " "
     ) a;
     print_endline ""
+*)

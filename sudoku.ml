@@ -76,10 +76,9 @@ let sudoku_decode get_value =
   done
 
 let _ =
-
-  let input_buf = dump_chan stdin in
+  let input_buf =  dump_chan stdin in
   close_in stdin;
-    
+
   let m = Array.make_matrix 9 9 0 in
   for i = 0 to 8 do
     for j = 0 to 8 do
@@ -96,4 +95,4 @@ let _ =
   | Sat.Sat a ->
     if not (Verif.verif cnf a) then
       print_endline ">> BUG <<";
-    print_endline "Sat"
+    sudoku_decode (fun i -> Some a.(i))
