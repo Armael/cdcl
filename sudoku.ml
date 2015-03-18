@@ -1,4 +1,3 @@
-open Sigs
 open Prelude
 
 let p i j d =
@@ -76,29 +75,25 @@ let sudoku_decode get_value =
     print_newline ();
   done
 
-module Make = functor (C : Clause) ->
-struct
+let _ =
 
-  module Clause = C
+  let input_buf = dump_chan stdin in
+  close_in stdin;
+    
+  let m = Array.make_matrix 9 9 0 in
+  for i = 0 to 8 do
+    for j = 0 to 8 do
+      m.(i).(j) <- (int_of_char @@ Buffer.nth input_buf (i * 9 + j)) - (int_of_char '0')
+    done
+  done;
+  let cnf = sudoku_encoding m in
 
-  type parsed = int array array
+  print_endline "parsed";
 
-  let parse buf =
-    let m = Array.make_matrix 9 9 0 in
-    for i = 0 to 8 do
-      for j = 0 to 8 do
-        m.(i).(j) <- (int_of_char @@ Buffer.nth buf (i * 9 + j)) - (int_of_char '0')
-      done
-    done;
-    let cnf = sudoku_encoding m in
-    (m, cnf)
-
-  let check _ nvars get_value = None
-  let output table nvars get_value =
-    match get_value with
-    | Some get_value -> 
-      Printf.printf "SATISFIABLE\n";
-      sudoku_decode get_value
-    | None ->
-      Printf.printf "UNSATISFIABLE\n"
-end
+  let st = Sat.init_state cnf in
+  match Sat.cdcl st with
+  | Sat.UnSat -> print_endline "UnSat"
+  | Sat.Sat a ->
+    if not (Verif.verif cnf a) then
+      print_endline ">> BUG <<";
+    print_endline "Sat"
