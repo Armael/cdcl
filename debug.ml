@@ -59,3 +59,5 @@ let bmagenta fmt = c ansi_bmagenta fmt
 
 let p0 f = p 0 f
 let p1 f = p 1 f
+let f0 = f 0
+let f1 = f 1

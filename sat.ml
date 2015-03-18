@@ -75,11 +75,11 @@ let pick_two_wl st cl =
   | ([], [], _) -> (* clause fausse *) assert false
   | ([], [x], []) -> (x, 0), 0
   | ([], [x], l) ->
-    p0 "hummmmm???\n";
+    p1 "hummmmm???\n";
     (x, most_recent st l), 0
   | ([], l, l') ->
     (* n'est pas censé arriver je pense; on fait un truc à la noix *)
-    p0 "hummmmm????\n";
+    p1 "hummmmm????\n";
     (most_recent st l, most_recent st l'), 0
 
 let watch_new_clause st cl_id =
@@ -103,7 +103,7 @@ let check_watched st =
       let cls = LitArray.get st.clauses_of_wl i in
       for j = 0 to Dynarray.length cls - 1 do
         let (u, v) = Dynarray.get st.wl_of_clause (Dynarray.get cls j) in
-        assert (u = i || v = i)
+        f1 (fun () -> assert (u = i || v = i))
       done
     ) [i; -i]
   done
@@ -188,7 +188,7 @@ let rec propagate (st: state): bool =
       (* retourne [false] en cas de conflit *)
       let choose_new_lit cl_id =
         let (v1, v2) = Dynarray.get st.wl_of_clause cl_id in
-        assert (v1 = v || v2 = v);
+        f1 (fun () -> assert (v1 = v || v2 = v));
         let v' = if v1 = v then v2 else v1 in
 
         (* Printf.printf "Currently watching (%d,%d) for clause %d; choose new lit\n%!" v1 v2 cl_id; *)
@@ -211,7 +211,7 @@ let rec propagate (st: state): bool =
             false
           | ([], _, _) -> assert false
           | ([x], [], _) ->
-            assert (x = v');
+            f1 (fun () -> assert (x = v'));
             (* Printf.printf "Cant watch someone else, propagating %d = true\n%!" v'; *)
             Queue.add (v', cl_id) st.queue;
             (* on continue de regarder v; pas de meilleur candidat, et normalement
@@ -219,7 +219,7 @@ let rec propagate (st: state): bool =
             Dynarray.push_back clauses_of_v cl_id |> ignore;
             true
           | ([x], l, _) ->
-            assert (x = v');
+            f1 (fun () -> assert (x = v'));
             let new_v = most_recent st l in
             (* Printf.printf "new_v: %d\n%!" new_v; *)
             Dynarray.set st.wl_of_clause cl_id (new_v, v');
@@ -310,7 +310,7 @@ let conflict_analysis (st: state): int * int (* id de la nouvelle clause apprise
         );
         decr i
       done;
-      assert (!n >= 1);
+      f1 (fun () -> assert (!n >= 1));
       if !n = 1 then !uip else 0
     end
   in
@@ -338,7 +338,7 @@ let conflict_analysis (st: state): int * int (* id de la nouvelle clause apprise
   in
 
   let rec loop () =
-    assert (temp_is_false ());
+    f1 (fun () -> assert (temp_is_false ()));
     (* on s'arrête au premier UIP *)
     let uip = temp_is_uip () in
     if uip <> 0 then uip
@@ -350,12 +350,12 @@ let conflict_analysis (st: state): int * int (* id de la nouvelle clause apprise
             !temp_clause
             (Dynarray.get st.clauses cause_cl_id |> set_of_cl)
             lit;
-        assert (temp_is_false ());
+        f1 (fun () -> assert (temp_is_false ()));
         loop ()
   in
   let uip = loop () in
 
-  assert (temp_is_false ());
+  f1 (fun () -> assert (temp_is_false ()));
 
   IntSet.iter (incr_lit_activity st) !temp_clause;
 
