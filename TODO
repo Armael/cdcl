@@ -3,3 +3,4 @@
 - faire une UI un peu moins austère
 - implémenter les restart
 - brancher la chose de sudoku-solving
+- implémenter le clause decay et la suppression de clauses ?
