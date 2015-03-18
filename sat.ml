@@ -317,7 +317,7 @@ let conflict_analysis (st: state): int * int (* id de la nouvelle clause apprise
   let find_resolving_lit_and_cl () =
     let resolution = ref (0, -1) in
     let i = ref (Dynarray.length st.propagation_log - 1) in
-    let l = Dynarray.get st.propagation_bt (Dynarray.length st.propagation_bt) in
+    let l = Dynarray.get st.propagation_bt (Dynarray.length st.propagation_bt - 1) in
     (* on ne veut pas regarder le littéral décidé, seulement ceux déduits *)
     while !resolution = (0, -1) && (!i > l) do
       let (lit, cause_cl) = Dynarray.get st.propagation_log !i in
@@ -441,8 +441,6 @@ let cdcl (st: state): outcome =
           (* nettoyage *)
           st.conflicting_clause <- (-1);
           
-          if (bt_steps = 0 || Dynarray.length st.propagation_bt < bt_steps) then
-            assert false;
           let i = ref (Dynarray.get st.propagation_bt (Dynarray.length st.propagation_bt - bt_steps)) in
           Dynarray.shrink st.propagation_bt (Dynarray.length st.propagation_bt - bt_steps);
           Dynarray.shrink st.propagation_log (!i + 1);
