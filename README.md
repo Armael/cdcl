@@ -1,2 +1,2 @@
 - `ocamlbuild sat.native`
-- `cat fichier.sat | ./sat.native`
+- `./sat.native < fichier.cnf`
