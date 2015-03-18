@@ -56,3 +56,6 @@ let bgreen fmt = c ansi_bgreen fmt
 let byellow fmt = c ansi_byellow fmt
 let bblue fmt = c ansi_bblue fmt
 let bmagenta fmt = c ansi_bmagenta fmt
+
+let p0 f = p 0 f
+let p1 f = p 1 f
