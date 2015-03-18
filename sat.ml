@@ -441,6 +441,8 @@ let cdcl (st: state): outcome =
           (* nettoyage *)
           st.conflicting_clause <- (-1);
           
+          if (bt_steps = 0 || Dynarray.length st.propagation_bt < bt_steps) then
+            assert false;
           let i = ref (Dynarray.get st.propagation_bt (Dynarray.length st.propagation_bt - bt_steps)) in
           Dynarray.shrink st.propagation_bt (Dynarray.length st.propagation_bt - bt_steps);
           Dynarray.shrink st.propagation_log (!i + 1);
@@ -460,26 +462,3 @@ let cdcl (st: state): outcome =
         a.(i-1) <- (Bt.get st.assign i > 0)
       done;
       Sat a
-
-(*
-let _ =
-  let input_buf = dump_chan stdin in
-  close_in stdin;
-  let cnf = Cnf.parse input_buf in
-
-  print_endline "parsed";
-  
-  let st = init_state cnf in
-  match cdcl st with
-  | UnSat -> print_endline "UnSat"
-  | Sat a ->
-    if not (Verif.verif cnf a) then
-      print_endline ">> BUG <<";
-    
-    print_string "S ";
-    Array.iteri (fun i b ->
-      print_int (if b then i+1 else -i-1);
-      print_string " "
-    ) a;
-    print_endline ""
-*)
