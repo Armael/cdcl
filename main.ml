@@ -1,6 +1,7 @@
 open Prelude
 
 let _ =
+  Arg.parse ["-v", Arg.Unit (fun () -> Debug.verbosity := 1), "verbose"] (fun _ -> ()) "";
   let input_buf = dump_chan stdin in
   close_in stdin;
   let cnf = Cnf.parse input_buf in
