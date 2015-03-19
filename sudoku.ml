@@ -59,6 +59,17 @@ let sudoku_encoding grid =
 
   (729, !nclauses, !clauses)
 
+let sudoku_line get_value =
+  for i = 0 to 8 do
+    for j = 0 to 8 do
+      try for d = 0 to 8 do
+          if get_value (p i j d) = Some true then (
+            print_int (d+1);
+            raise Exit
+          )
+        done; print_int 0 with Exit -> ();
+    done; done
+
 let sudoku_decode get_value =
   for i = 0 to 8 do
     if i mod 3 = 0 then print_endline "-------------";
@@ -73,10 +84,16 @@ let sudoku_decode get_value =
     done;
     print_char '|';
     print_newline ();
-  done
+  done;
+  print_endline "-------------"
 
 let _ =
-  Arg.parse ["-v", Arg.Unit (fun () -> Debug.set_verbosity 1), "verbose"] (fun _ -> ()) "";
+	let pprint = ref false in
+
+  Arg.parse [
+      ("-v", Arg.Unit (fun () -> Debug.set_verbosity 1), "verbose");
+      ("-pprint", Arg.Unit (fun () -> pprint := true), "sudoku pretty printing")
+    ] (fun _ -> ()) "";
   let input_buf =  dump_chan stdin in
   close_in stdin;
 
@@ -88,12 +105,16 @@ let _ =
   done;
   let cnf = sudoku_encoding m in
 
-  print_endline "parsed";
-
   let st = Sat.init_state cnf in
   match Sat.cdcl st with
-  | Sat.UnSat -> print_endline "UnSat"
+  | Sat.UnSat -> print_endline "NoSolution"
   | Sat.Sat a ->
     if not (Verif.verif cnf a) then
       print_endline ">> BUG <<";
-    sudoku_decode (fun i -> Some a.(i))
+    if (!pprint) then
+      sudoku_decode (fun i -> Some a.(i))
+    else (
+      print_string "Solution:";
+      sudoku_line (fun i -> Some a.(i));
+      print_newline ()
+    )
