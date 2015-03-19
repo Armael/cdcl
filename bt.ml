@@ -95,8 +95,8 @@ let mk_backtrackable_array arr =
 
 let mk_backtrackable_dynarray arr =
   mk_backtrackable
-    ~set:Dynarray.set
-    ~get:Dynarray.get
+    ~set:DynArray.set
+    ~get:DynArray.get
     arr
 
 (* Makes a functionnal value backtrackable, by storing it in a

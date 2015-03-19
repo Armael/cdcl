@@ -1,6 +1,5 @@
-(* Dynamic arrays *)
-
 type 'a t
+
 val make : int -> 'a -> 'a t
 val init : int -> (int -> 'a) -> 'a t
 val length : 'a t -> int

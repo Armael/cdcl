@@ -76,7 +76,7 @@ let sudoku_decode get_value =
   done
 
 let _ =
-  Arg.parse ["-v", Arg.Unit (fun () -> Debug.verbosity := 1), "verbose"] (fun _ -> ()) "";
+  Arg.parse ["-v", Arg.Unit (fun () -> Debug.set_verbosity 1), "verbose"] (fun _ -> ()) "";
   let input_buf =  dump_chan stdin in
   close_in stdin;
 
