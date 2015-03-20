@@ -1,5 +1,5 @@
 all:
-	ocamlbuild sudoku.native
+	ocamlbuild -package unix sudoku.native
 
 clean:
 	ocamlbuild -clean

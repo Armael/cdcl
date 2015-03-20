@@ -89,10 +89,12 @@ let sudoku_decode get_value =
 
 let _ =
 	let pprint = ref false in
+	let minisat = ref false in
 
   Arg.parse [
       ("-v", Arg.Unit (fun () -> Debug.set_verbosity 1), "verbose");
-      ("-pprint", Arg.Unit (fun () -> pprint := true), "sudoku pretty printing")
+      ("-pprint", Arg.Unit (fun () -> pprint := true), "sudoku pretty printing");
+      ("-minisat", Arg.Unit (fun () -> minisat := true), "use of minisat")
     ] (fun _ -> ()) "";
   let input_buf =  dump_chan stdin in
   close_in stdin;
@@ -111,10 +113,21 @@ let _ =
   | Sat.Sat a ->
     if not (Verif.verif cnf a) then
       print_endline ">> BUG <<";
-    if (!pprint) then
-      sudoku_decode (fun i -> Some a.(i))
-    else (
-      print_string "Solution:";
-      sudoku_line (fun i -> Some a.(i));
-      print_newline ()
+    if (!minisat) then (
+      let (c_in, c_out) = Unix.open_process "minisat -verb=0 /dev/stdin /dev/stdout" in
+      let output_buff = Buffer.create 257 in
+      Cnf.buffer_out cnf output_buff;
+      Buffer.output_buffer c_out output_buff;
+      flush c_out;(*
+      print_endline (input_line c_in);
+      flush stdout;*)
+      ignore (Unix.close_process (c_in, c_out));
     )
+    else (
+      if (!pprint) then
+        sudoku_decode (fun i -> Some a.(i))
+      else (
+        print_string "Solution:";
+        sudoku_line (fun i -> Some a.(i));
+        print_newline ()
+    ))
