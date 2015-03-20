@@ -56,7 +56,7 @@ let print_assign st =
   for i = 1 to st.nvars do
     match Bt.get st.assign i with
     | 0 -> Printf.printf " -"
-    | 1 -> Printf.printf " %d" i 
+    | 1 -> Printf.printf " %d" i
     | _ -> Printf.printf " %d" (-i)
   done; print_endline ""
 
@@ -85,7 +85,7 @@ let print_propagation_log st =
 (******************************************************************************)
 
 (* Propagation (Watched-literals) utility functions ***************************)
-    
+
 let discriminate st cl =
   let rec aux (idk, y, n) i =
     if i = Array.length cl then (idk, y, n)
@@ -177,7 +177,7 @@ let init_state ((nvars, nclauses, clauses): Cnf.t): state =
 
   let propagation_log = DynArray.make 0 (0, -1) in
   let propagation_bt = DynArray.make 0 0 in
-  
+
   let lit_activity = LitArray.make nvars 0. in
 
   let st =
@@ -185,7 +185,7 @@ let init_state ((nvars, nclauses, clauses): Cnf.t): state =
       assign;
       clauses;
       learnt_clauses_begin = nclauses;
-      
+
       wl_of_clause;
       clauses_of_wl;
       queue = Queue.create ();
@@ -195,7 +195,7 @@ let init_state ((nvars, nclauses, clauses): Cnf.t): state =
       propagation_bt;
       decision_level = 0;
       conflicting_clause = -1;
-    
+
       lit_activity;
       lit_activity_increment = 1.;
       lit_activity_decay = 1. /. 0.95;
@@ -219,7 +219,7 @@ let reset_state st =
   done;
   (* clear the backtrack stack *)
   Bt.forget st.assign;
-  
+
   Queue.clear st.queue;
   DynArray.shrink st.propagation_log 0;
   DynArray.shrink st.propagation_bt 0;
@@ -249,14 +249,14 @@ let reset_state st =
    of the false clause that triggered the conflict.
 *)
 let rec propagate (st: state): bool =
-  if st.is_unsat then false (* doesn't matter actually *) 
+  if st.is_unsat then false (* doesn't matter actually *)
   else if Queue.is_empty st.queue then true
   else begin
     let (v, cl_cause) = Queue.take st.queue in
 
     let v = -v in (* we propagate v = FALSE *)
     Debug.p 2 "PROPAGATING %d = true\n\n%!" (-v);
-    
+
     match Bt.get st.assign v with
     | -1 -> true
     | 1 -> st.conflicting_clause <- cl_cause; false
@@ -266,9 +266,9 @@ let rec propagate (st: state): bool =
         |> ignore;
       DynArray.push_back st.propagation_log (-v, cl_cause) |> ignore;
       Bt.set st.assign v (-1);
-      
+
       let clauses_of_v = DynArray.make 0 0 in
-      
+
       (* Returns [false] if there was a conflict *)
       let choose_new_lit cl_id =
         let (v1, v2) = DynArray.get st.wl_of_clause cl_id in
@@ -349,11 +349,11 @@ let pick_branching_variable (st: state): int =
 (* The Conflict analysis / clause learning function.
    Called everytime there is a conflict
 *)
-let conflict_analysis (st: state): int * int (* id of the new clause learnt, 
+let conflict_analysis (st: state): int * int (* id of the new clause learnt,
                                                 nb of backtracks *) =
   let set_of_cl cl = Array.to_list cl |> IntSet.of_list in
   let cl_of_set s = IntSet.elements s |> Array.of_list in
-    
+
   let false_clause = DynArray.get st.clauses st.conflicting_clause in
   Debug.f 2 (fun _ ->
     Printf.printf "False clause (%d):" st.conflicting_clause;
@@ -460,7 +460,7 @@ let conflict_analysis (st: state): int * int (* id of the new clause learnt,
     IntSet.iter (Printf.printf " %d") !temp_clause;
     print_endline ""
   );
-  
+
   (new_id, bt_steps)
 
 
@@ -472,7 +472,7 @@ let cdcl (st: state): outcome =
       if Queue.is_empty st.queue then (
         let x = pick_branching_variable st in
         Debug.p 2 "DECIDING %d = true\n%!" x;
-      
+
         Bt.push_state st.assign;
         st.decision_level <- st.decision_level + 1;
         Queue.add (x, -1) st.queue;
@@ -487,23 +487,23 @@ let cdcl (st: state): outcome =
           st.conflicts_counter <- st.conflicts_counter + 1;
           let new_clause_id, bt_steps = conflict_analysis st in
           Debug.p 2 "Backtracking of %d steps\n%!" bt_steps;
-          
+
           if bt_steps > st.decision_level then
             st.is_unsat <- true
           else (
             (* Decay activities everytime there is a conflict *)
             decay_lit_activity st;
-            
+
             (* Backtracking *)
             st.conflicting_clause <- (-1);
-            
+
             let new_dl = DynArray.length st.propagation_bt - bt_steps in
             let i = DynArray.get st.propagation_bt new_dl in
             DynArray.shrink st.propagation_bt new_dl;
             DynArray.shrink st.propagation_log i;
             st.decision_level <- st.decision_level - bt_steps;
             Bt.pop_n_state st.assign bt_steps;
-            
+
             Debug.f 2 (fun _ -> print_propagation_log st);
 
             (* We compute the watched literals for the new clause
@@ -516,7 +516,7 @@ let cdcl (st: state): outcome =
       (* Do we restart? *)
       if st.conflicts_counter >= st.restart_limit then (
         Debug.p 2 "Restarting\n%!";
-    
+
         st.conflicts_counter <- 0;
         st.restart_limit <- (float_of_int st.restart_limit) *. st.restart_mult
                             |> int_of_float;
