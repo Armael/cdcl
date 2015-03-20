@@ -81,39 +81,3 @@ let pop_n_state bt n =
   for i = 1 to n do
     pop_state bt
   done
-
-(* Utility functions : convenience wrappers, that just use
-   mk_backtrackable with particular set and get functions *)
-
-(* Wrapper to mk_backtrackable that turns an array into a
-   backtrackable one *)
-let mk_backtrackable_array arr =
-  mk_backtrackable
-    ~set:Array.set
-    ~get:Array.get
-    arr
-
-let mk_backtrackable_dynarray arr =
-  mk_backtrackable
-    ~set:DynArray.set
-    ~get:DynArray.get
-    arr
-
-(* Makes a functionnal value backtrackable, by storing it in a
-   ref. The type of the keys is unit, so if v is of type 'a, the
-   resulting type is (unit, 'a, 'a ref) Bt.backtrackable *)
-let mk_backtrackable_value v =
-  let r = ref v in
-  mk_backtrackable
-    ~set:(fun r _ y -> r := y)
-    ~get:(fun r _ -> !r)
-    r
-
-(* Makes an array of size 2*n backtrackable, but with keys between -n
-   and n (excluding 0). That is useful to have arrays indexed by
-   literals *)
-let mk_backtrackable_var_array a =
-  mk_backtrackable
-    ~set:(fun a x v -> a.(Prelude.aid x) <- v)
-    ~get:(fun a x -> a.(Prelude.aid x))
-    a

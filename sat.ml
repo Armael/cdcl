@@ -1,28 +1,34 @@
 open Prelude
-open Debug
 
+(* Mutable global state; shared by all functions *)
 type state = {
   nvars: int;
   assign: (int, int, int array) Bt.t;
   clauses: int Array.t DynArray.t;
   mutable learnt_clauses_begin: int;
 
-  (* Propagation *)
+  (*** Propagation: structures for watched literals + propagation queue *)
   wl_of_clause: (int * int) DynArray.t;
   clauses_of_wl: int DynArray.t LitArray.t;
   queue: (int (* lit *) *
           int (* cause clause *)) Queue.t;
 
-  (* Clause learning *)
+  (**** Clause learning structures *)
+  (* If "cause clause" is -1, then this literal has been
+     propagated due to a decision, not deduced *)
   propagation_log: (int * (* propagated literal *)
                     int (* cause clause *)) DynArray.t;
-      (* Si "cause clause" est -1, alors il s'agit
-         d'une décision, non d'une conséquence *)
+  (* List of the index of the decided literals. Useful
+     for backtracking propagation_log *)
   propagation_bt: int DynArray.t;
+  (* Current decision level *)
   mutable decision_level: int;
+  (* After a conflict, set to the false clause that has
+     been detected *)
   mutable conflicting_clause: int;
 
-  (* Heuristique *)
+  (**** Heuristic-related structures *)
+  (* Activity (VSIDS) *)
   lit_activity: float LitArray.t;
   lit_activity_increment: float;
   lit_activity_decay: float;
@@ -35,16 +41,45 @@ type state = {
   (* multiplieur pour la limite du nb de clauses *)
 }
 
+type outcome =
+  | UnSat
+  | Sat of bool Array.t
+
+(* Debug related functions ****************************************************)
+
 let print_assign st =
-  p1 "Assign:";
+  print_string "Assign:";
   for i = 1 to st.nvars do
     match Bt.get st.assign i with
-    | 0 -> p1 " -"
-    | 1 -> p1 " %d" i 
-    | _ -> p1 " %d" (-i)
-  done;
-  p1 "\n"
+    | 0 -> Printf.printf " -"
+    | 1 -> Printf.printf " %d" i 
+    | _ -> Printf.printf " %d" (-i)
+  done; print_endline ""
 
+(* check that the two wl-related arrays are coherent *)
+let check_watched st =
+  for i = 1 to st.nvars do
+    List.iter (fun i ->
+      let cls = LitArray.get st.clauses_of_wl i in
+      for j = 0 to DynArray.length cls - 1 do
+        let (u, v) = DynArray.get st.wl_of_clause (DynArray.get cls j) in
+        assert (u = i || v = i)
+      done
+    ) [i; -i]
+  done
+
+let print_propagation_log st =
+  print_string "Propagation log:";
+  for i = 0 to DynArray.length st.propagation_log - 1 do
+    let (lit, cause_cl) = DynArray.get st.propagation_log i in
+    if cause_cl = (-1) then print_string " |";
+    Printf.printf " (%d, %d)" lit cause_cl
+  done; print_endline ""
+
+(******************************************************************************)
+
+(* Propagation (Watched-literals) utility functions ***************************)
+    
 let discriminate st cl =
   let rec aux (idk, y, n) i =
     if i = Array.length cl then (idk, y, n)
@@ -60,7 +95,7 @@ let discriminate st cl =
 
 let most_recent st l =
   let rec aux i =
-    if i < 0 then (p0 "dafuq??\n"; List.hd l)
+    if i < 0 then (Debug.p 1 "most_recent: weird stuff happening\n"; List.hd l)
     else (try List.find (fun x -> abs x = abs (fst (DynArray.get st.propagation_log i))) l
           with Not_found ->
             aux (i-1)) in
@@ -72,19 +107,25 @@ let pick_two_wl st cl =
   | ([x], [], []) -> (x, 0), x
   | ([x], [], l) -> (x, most_recent st l), x
   | ([x], l, _) -> (x, most_recent st l), 0
-  | ([], [], _) -> (* clause fausse *) assert false
+  | ([], [], _) -> (* false clause *) assert false
   | ([], [x], []) -> (x, 0), 0
   | ([], [x], l) ->
-    p1 "hummmmm???\n";
+    Debug.p 1 "pick_two_wl: weird stuff happening\n";
     (x, most_recent st l), 0
   | ([], l, l') ->
     (* n'est pas censé arriver je pense; on fait un truc à la noix *)
-    p1 "hummmmm????\n";
+    Debug.p 1 "pick_two_wl: weird stuff happening\n";
     (most_recent st l, most_recent st l'), 0
+
+
+let add_new_clause st cl =
+  let new_id = DynArray.push_back st.clauses cl in
+  DynArray.push_back st.wl_of_clause (0,0) |> ignore;
+  new_id
 
 let watch_new_clause st cl_id =
   let (u, v), propg = pick_two_wl st (DynArray.get st.clauses cl_id) in
-  p1 "(%d) watched: (%d, %d); propagated: %d\n%!" cl_id u v propg;
+  Debug.p 1 "(new clause %d) watched: (%d, %d); propagated: %d\n%!" cl_id u v propg;
   if propg <> 0 then Queue.add (propg, cl_id) st.queue;
   DynArray.set st.wl_of_clause cl_id (u, v);
   if u <> 0 then
@@ -92,32 +133,36 @@ let watch_new_clause st cl_id =
   if v <> 0 then
     DynArray.push_back (LitArray.get st.clauses_of_wl v) cl_id |> ignore
 
-let add_new_clause st cl =
-  let new_id = DynArray.push_back st.clauses cl in
-  DynArray.push_back st.wl_of_clause (0,0) |> ignore;
-  new_id
+(******************************************************************************)
 
-let check_watched st =
-  for i = 1 to st.nvars do
-    List.iter (fun i ->
-      let cls = LitArray.get st.clauses_of_wl i in
-      for j = 0 to DynArray.length cls - 1 do
-        let (u, v) = DynArray.get st.wl_of_clause (DynArray.get cls j) in
-        f1 (fun () -> assert (u = i || v = i))
-      done
-    ) [i; -i]
-  done
+(* Heuristic utility functions ************************************************)
 
+let incr_lit_activity st x =
+  LitArray.set st.lit_activity x
+    ((LitArray.get st.lit_activity x) +. st.lit_activity_increment)
+
+let decay_lit_activity st =
+  LitArray.map (fun a -> a *. st.lit_activity_decay) st.lit_activity
+
+let total_assign st =
+  Array.for_all ((<>) 0) st.assign.Bt.container
+
+(******************************************************************************)
+
+(* Main functions: propagation, decision, conflict analysis, main loop ********)
+
+(* Create a state from a cnf formula *)
 let init_state ((nvars, nclauses, clauses): Cnf.t): state =
   let assign = Bt.mk_backtrackable
       ~get:(fun a i -> if i > 0 then a.(i-1) else - a.((abs i) - 1))
-      ~set:(fun a i x -> if i > 0 then a.(i-1) <- x else a.((abs i) - 1) <- - x)
+      ~set:(fun a i x -> if i > 0 then a.(i-1) <- x else a.((abs i) - 1) <- -x)
       (Array.make nvars 0) in
   let cls = ref clauses in
   let clauses = DynArray.init nclauses (fun _ ->
-    let arr = Array.of_list (List.hd !cls) in (* todo: éviter ça au parsing (cnf.ml) *)
+    let arr = Array.of_list (List.hd !cls) in
     cls := List.tl !cls;
-    arr) in
+    arr
+  ) in
 
   let wl_of_clause = DynArray.make nclauses (0,0) in
   let clauses_of_wl = LitArray.fmake nvars (fun () -> DynArray.make 0 0) in
@@ -153,25 +198,25 @@ let init_state ((nvars, nclauses, clauses): Cnf.t): state =
     }
   in
 
-  p1 "0/\n";
-  
-  (* On initialise les watched literals *)
+  (* Initialize the watched literals *)
   for cl_id = 0 to nclauses - 1 do
     watch_new_clause st cl_id
   done;
   st
 
-(* retourne [true] si on peut continuer, [false] s'il y a eu un conflit.
-   Dans le cas où [false] est retourné, [st.conflicting_clause] doit indiquer
-   l'id de la cause fausse qui a signalé le conflit.
+(* The propagation function
+
+   Returns [true] if we can continue, [false] if a conflict happened.
+   If [false] is returned, [st.conflicting_clause] must contain the id
+   of the false clause that triggered the conflict.
 *)
 let rec propagate (st: state): bool =
   if Queue.is_empty st.queue then true
   else begin
     let (v, cl_cause) = Queue.take st.queue in
 
-    let v = -v in (* on propage v = FALSE *)
-    p1 "PROPAGATING %d = false\n\n%!" (v);
+    let v = -v in (* we propagate v = FALSE *)
+    Debug.p 1 "PROPAGATING %d = true\n\n%!" (-v);
     
     match Bt.get st.assign v with
     | -1 -> true
@@ -185,49 +230,40 @@ let rec propagate (st: state): bool =
       
       let clauses_of_v = DynArray.make 0 0 in
       
-      (* retourne [false] en cas de conflit *)
+      (* Returns [false] if there was a conflict *)
       let choose_new_lit cl_id =
         let (v1, v2) = DynArray.get st.wl_of_clause cl_id in
-        f1 (fun () -> assert (v1 = v || v2 = v));
+        Debug.f 1 (fun _ -> assert (v1 = v || v2 = v));
         let v' = if v1 = v then v2 else v1 in
 
-        (* Printf.printf "Currently watching (%d,%d) for clause %d; choose new lit\n%!" v1 v2 cl_id; *)
-
         if v' = 0 then (
-          (* cl_id correspond à la clause [v], et v est faux.
-             Il faut backtracker *)
+          (* cl_id corresponds to clause [v], and v is false.
+             We must backtrack *)
           st.conflicting_clause <- cl_id;
           false
         ) else if Bt.get st.assign v' = 1 then (
           DynArray.push_back clauses_of_v cl_id |> ignore;
           true
         ) else (
-          print_assign st;
-          (* Printf.printf "cl_id: %d; v: %d; v': %d\n%!" cl_id v v'; *)
-
+          Debug.f 1 (fun _ -> print_assign st);
           match discriminate st (DynArray.get st.clauses cl_id) with
           | ([], [], _) -> (* conflit *)
             st.conflicting_clause <- cl_id;
             false
           | ([], _, _) -> assert false
           | ([x], [], _) ->
-            f1 (fun () -> assert (x = v'));
-            (* Printf.printf "Cant watch someone else, propagating %d = true\n%!" v'; *)
             Queue.add (v', cl_id) st.queue;
-            (* on continue de regarder v; pas de meilleur candidat, et normalement
-               v' sera assigné à vrai par la propagation *)
+            (* We continue to watch v; there is no better candidate, and v'
+               should be set to true by the incoming propagation *)
             DynArray.push_back clauses_of_v cl_id |> ignore;
             true
           | ([x], l, _) ->
-            f1 (fun () -> assert (x = v'));
             let new_v = most_recent st l in
-            (* Printf.printf "new_v: %d\n%!" new_v; *)
             DynArray.set st.wl_of_clause cl_id (new_v, v');
             DynArray.push_back (LitArray.get st.clauses_of_wl new_v) cl_id |> ignore;
             true
           | (l, _, _) ->
             let new_v = List.find ((<>) v') l in
-            (* Printf.printf "new_v: %d\n%!" new_v; *)
             DynArray.set st.wl_of_clause cl_id (new_v, v');
             DynArray.push_back (LitArray.get st.clauses_of_wl new_v) cl_id |> ignore;
             true
@@ -236,7 +272,7 @@ let rec propagate (st: state): bool =
 
       let cls_of_v = LitArray.get st.clauses_of_wl v in
 
-      check_watched st;
+      Debug.f 1 (fun _ -> check_watched st);
 
       match
         for i = 0 to DynArray.length cls_of_v - 1 do
@@ -251,49 +287,56 @@ let rec propagate (st: state): bool =
         LitArray.set st.clauses_of_wl v clauses_of_v
       with
       | () ->
-        check_watched st;
+        Debug.f 1 (fun _ -> check_watched st);
         if not (Queue.is_empty st.queue) then propagate st else true
       | exception Exit ->
-        check_watched st;
+        Debug.f 1 (fun _ -> check_watched st);
         false
   end
-    
-let incr_lit_activity st x =
-  LitArray.set st.lit_activity x
-    ((LitArray.get st.lit_activity x) +. st.lit_activity_increment)
 
-let decay_lit_activity st =
-  LitArray.map (fun a -> a *. st.lit_activity_decay) st.lit_activity
+(* The decision function.
+   Picks a new unassigned literal to be propagated,
+   according to the activities
+*)
+let pick_branching_variable (st: state): int =
+  let x = ref (0, -1.) in
+  for i = 1 to st.nvars do
+    List.iter (fun i ->
+      let a = LitArray.get st.lit_activity i in
+      if a > snd !x && Bt.get st.assign i = 0 then
+        x := (i, a)
+    ) [i; -i]
+  done;
+  fst !x
 
-let print_propagation_log st =
-  p1 "Propagation log:";
-  for i = 0 to DynArray.length st.propagation_log - 1 do
-    let (lit, cause_cl) = DynArray.get st.propagation_log i in
-    if cause_cl = (-1) then p1 " |";
-    p1 " (%d, %d)" lit cause_cl
-  done; p1 "\n"
-
-let conflict_analysis (st: state): int * int (* id de la nouvelle clause apprise, 
-                                                nombre de backtracks *) =
+(* The Conflict analysis / clause learning function.
+   Called everytime there is a conflict
+*)
+let conflict_analysis (st: state): int * int (* id of the new clause learnt, 
+                                                nb of backtracks *) =
   let set_of_cl cl = Array.to_list cl |> IntSet.of_list in
   let cl_of_set s = IntSet.elements s |> Array.of_list in
     
   let false_clause = DynArray.get st.clauses st.conflicting_clause in
-  p1 "false clause %d:" st.conflicting_clause;
-  Array.iter (fun i -> p1 " %d" i) false_clause;
-  p1 "\n";
+  Debug.f 1 (fun _ ->
+    Printf.printf "False clause (%d):" st.conflicting_clause;
+    Array.iter (Printf.printf " %d") false_clause;
+    print_endline "";
 
-  print_propagation_log st;
+    print_propagation_log st
+  );
 
   let temp_clause = ref (set_of_cl false_clause) in
 
   let temp_is_unit () = IntSet.min_elt !temp_clause = IntSet.max_elt !temp_clause in
 
   let temp_is_uip () =
-    p1 "<temp_is_uip> ";
-    p1 "temp clause :" ;
-    IntSet.iter (fun i -> p1 " %d" i) !temp_clause;
-    p1 "\n";
+    Debug.f 1 (fun _ ->
+      Printf.printf "temp_is_uip: ";
+      Printf.printf "temp clause:" ;
+      IntSet.iter (Printf.printf " %d") !temp_clause;
+      print_endline ""
+    );
 
     if temp_is_unit () then
       IntSet.min_elt !temp_clause
@@ -310,7 +353,7 @@ let conflict_analysis (st: state): int * int (* id de la nouvelle clause apprise
         );
         decr i
       done;
-      f1 (fun () -> assert (!n >= 1));
+      Debug.f 1 (fun () -> assert (!n >= 1));
       if !n = 1 then !uip else 0
     end
   in
@@ -319,7 +362,7 @@ let conflict_analysis (st: state): int * int (* id de la nouvelle clause apprise
     let resolution = ref (0, -1) in
     let i = ref (DynArray.length st.propagation_log - 1) in
     let l = DynArray.get st.propagation_bt (DynArray.length st.propagation_bt - 1) in
-    (* on ne veut pas regarder le littéral décidé, seulement ceux déduits *)
+    (* We do not want to look at the decided literal, only the deduced ones *)
     while !resolution = (0, -1) && (!i > l) do
       let (lit, cause_cl) = DynArray.get st.propagation_log !i in
       if IntSet.mem (-lit) !temp_clause then
@@ -333,12 +376,7 @@ let conflict_analysis (st: state): int * int (* id de la nouvelle clause apprise
     IntSet.remove lit (IntSet.remove (-lit) (IntSet.union cl1 cl2))
   in
 
-  let temp_is_false () =
-    IntSet.for_all (fun lit -> Bt.get st.assign lit = -1) !temp_clause
-  in
-
   let rec loop () =
-    f1 (fun () -> assert (temp_is_false ()));
     (* on s'arrête au premier UIP *)
     let uip = temp_is_uip () in
     if uip <> 0 then uip
@@ -350,19 +388,17 @@ let conflict_analysis (st: state): int * int (* id de la nouvelle clause apprise
             !temp_clause
             (DynArray.get st.clauses cause_cl_id |> set_of_cl)
             lit;
-        f1 (fun () -> assert (temp_is_false ()));
         loop ()
   in
   let uip = loop () in
 
-  f1 (fun () -> assert (temp_is_false ()));
-
+  (* Bump activity of the literals in the conflicting clause *)
   IntSet.iter (incr_lit_activity st) !temp_clause;
 
   let bt_steps =
     if temp_is_unit () then
-      1 (* le seul littéral de la clause est forcément l'uip, qui a été
-           décidé au niveau courant *)
+      1 (* The only literal of the clause can only be the uip,
+           which has been decided at the current decision level *)
     else begin
       let steps = ref 0 in
       (try
@@ -377,46 +413,28 @@ let conflict_analysis (st: state): int * int (* id de la nouvelle clause apprise
     end
   in
 
-  (* On apprend !temp_clause *)
+  (* Learn !temp_clause *)
   let new_id = add_new_clause st (cl_of_set !temp_clause) in
-  p1 "learning clause %d:" new_id;
-  IntSet.iter (fun i -> p1 " %d" i) !temp_clause;
-  p1 "\n";
+  Debug.f 1 (fun _ ->
+    Printf.printf "Learning clause %d:" new_id;
+    IntSet.iter (Printf.printf " %d") !temp_clause;
+    print_endline ""
+  );
   
   (new_id, bt_steps)
 
-let pick_branching_variable (st: state): int =
-  let x = ref (0, -1.) in
-  for i = 1 to st.nvars do
-    List.iter (fun i ->
-      let a = LitArray.get st.lit_activity i in
-      if a > snd !x && Bt.get st.assign i = 0 then
-        x := (i, a)
-    ) [i; -i]
-  done;
-  fst !x
-
-type outcome =
-  | UnSat
-  | Sat of bool Array.t
-
-let total_assign st =
-  Array.for_all ((<>) 0) st.assign.Bt.container
 
 let cdcl (st: state): outcome =
-  check_watched st;
-  
   match propagate st with
   | false (* conflict *) -> UnSat
   | true ->
-    p1 "2/";
     let unsat = ref false in
     while not !unsat && not (total_assign st) do
       check_watched st;
       
       if Queue.is_empty st.queue then (
         let x = pick_branching_variable st in
-        p1 "DECIDING %d = true\n%!" x;
+        Debug.p 1 "DECIDING %d = true\n%!" x;
       
         Bt.push_state st.assign;
         st.decision_level <- st.decision_level + 1;
@@ -424,32 +442,35 @@ let cdcl (st: state): outcome =
       );
 
       match propagate st with
-      | true -> p1 "propagation ok\n"; ()
+      | true -> Debug.p 1 "Propagation ok\n%!"; ()
       | false ->
-        p1 "conflict\n";
+        Debug.p 1 "Conflict\n%!";
         Queue.clear st.queue;
         
         let new_clause_id, bt_steps = conflict_analysis st in
-        p1 "Backtracking of %d steps\n%!" bt_steps;
+        Debug.p 1 "Backtracking of %d steps\n%!" bt_steps;
           
         if bt_steps > st.decision_level then
           unsat := true
         else (
-          (* Decay des activités à chaque conflit *)
+          (* Decay activities everytime there is a conflict *)
           decay_lit_activity st;
           
-          (* on backtrack *)
-          (* nettoyage *)
+          (* Backtracking *)
           st.conflicting_clause <- (-1);
           
-          let i = ref (DynArray.get st.propagation_bt (DynArray.length st.propagation_bt - bt_steps)) in
-          DynArray.shrink st.propagation_bt (DynArray.length st.propagation_bt - bt_steps);
-          DynArray.shrink st.propagation_log (!i + 1);
+          let new_dl = DynArray.length st.propagation_bt - bt_steps in
+          let i = DynArray.get st.propagation_bt new_dl in
+          DynArray.shrink st.propagation_bt new_dl;
+          DynArray.shrink st.propagation_log (i + 1);
           st.decision_level <- st.decision_level - bt_steps;
           Bt.pop_n_state st.assign bt_steps;
 
-          print_propagation_log st;
+          Debug.f 1 (fun _ -> print_propagation_log st);
 
+          (* We compute the watched literals for the new clause
+             *after* backtracking, since this choice depends on the
+             current assignation *)
           watch_new_clause st new_clause_id
         )
     done;

@@ -51,7 +51,7 @@ let parse buffer : t =
           incorrect *)
        (* nb_clauses := c *)
        | 'c' -> ()
-       | _ -> (* So it's a clause *)
+       | _ -> (* It's a clause *)
          incr nb_clauses;
          clauses := (parse_clause line)::!clauses) i
      done

@@ -20,8 +20,3 @@ val push_state : ('a, 'b, 'c) t -> unit
 val pop_state : ('a, 'b, 'c) t -> unit
 val push_n_state : ('a, 'b, 'c) t -> int -> unit
 val pop_n_state : ('a, 'b, 'c) t -> int -> unit
-
-val mk_backtrackable_array : 'a array -> (int, 'a, 'a array) t
-val mk_backtrackable_dynarray : 'a DynArray.t -> (int, 'a, 'a DynArray.t) t
-val mk_backtrackable_value : 'a -> ('b, 'a, 'a ref) t
-val mk_backtrackable_var_array : 'a array -> (int, 'a, 'a array) t

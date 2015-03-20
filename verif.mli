@@ -1,1 +1,1 @@
-val verif : int * 'a * int list list -> bool array -> bool
+val verif : Cnf.t -> bool array -> bool
