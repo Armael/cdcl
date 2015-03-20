@@ -49,6 +49,15 @@ let dump_chan chan =
     assert false
   with End_of_file -> b
 
+let string_dump chan =
+  let buf = Buffer.create 200 in
+  try
+    while true do
+      let l = input_line chan in
+      Buffer.add_string buf (l ^ "\n")
+    done; assert false
+  with End_of_file -> Buffer.contents buf
+
 module Buffer = struct
   include Buffer
 

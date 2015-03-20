@@ -92,10 +92,11 @@ let _ =
 	let minisat = ref false in
 
   Arg.parse [
-      ("-v", Arg.Unit (fun () -> Debug.set_verbosity 1), "verbose");
-      ("-pprint", Arg.Unit (fun () -> pprint := true), "sudoku pretty printing");
-      ("-minisat", Arg.Unit (fun () -> minisat := true), "use of minisat")
-    ] (fun _ -> ()) "";
+      "-v", Arg.Unit (fun () -> Debug.set_verbosity 1), "Print debug message and execute runtime tests";
+      "-pprint", Arg.Set pprint, "Pretty-print the solution as a sudoku grid";
+      "-minisat", Arg.Set minisat, "Use minisat instead of the internal solver";
+    ] (fun _ -> ()) "Usage: ./sudoku-solver < sudoku_instance";
+
   let input_buf =  dump_chan stdin in
   close_in stdin;
 
