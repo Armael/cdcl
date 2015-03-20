@@ -171,11 +171,6 @@ let init_state ((nvars, nclauses, clauses): Cnf.t): state =
   let propagation_bt = DynArray.make 0 0 in
   
   let lit_activity = LitArray.make nvars 0. in
-  for i = 0 to nclauses - 1 do
-    Array.iter (fun lit ->
-      LitArray.set lit_activity lit ((LitArray.get lit_activity lit) +. 1.)
-    ) (DynArray.get clauses i)
-  done;
 
   let st =
     { nvars;
