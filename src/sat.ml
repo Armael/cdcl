@@ -75,7 +75,11 @@ let print_propagation_log st =
     let (lit, cause_cl) = DynArray.get st.propagation_log i in
     if cause_cl = (-1) then print_string " |";
     Printf.printf " (%d, %d)" lit cause_cl
-  done; print_endline ""
+  done; print_endline "";
+  for i = 0 to DynArray.length st.propagation_bt - 1 do
+    Printf.printf " %d" (DynArray.get st.propagation_bt i);
+  done;
+  print_endline "<<"
 
 (******************************************************************************)
 
@@ -389,12 +393,15 @@ let conflict_analysis (st: state): int * int (* id of the new clause learnt,
   let find_resolving_lit_and_cl () =
     let resolution = ref (0, -1) in
     let i = ref (DynArray.length st.propagation_log - 1) in
-    let l = DynArray.get st.propagation_bt (DynArray.length st.propagation_bt - 1) in
     (* We do not want to look at the decided literal, only the deduced ones *)
-    while !resolution = (0, -1) && (!i > l) do
-      let (lit, cause_cl) = DynArray.get st.propagation_log !i in
-      if IntSet.mem (-lit) !temp_clause then
-        resolution := (lit, cause_cl);
+    let lit = ref 0 and cause_cl = ref (-1) in
+    while !resolution = (0, -1) &&
+          (let (l, c) = DynArray.get st.propagation_log !i in
+           lit := l; cause_cl := c;
+           c <> -1)
+    do
+      if IntSet.mem (- !lit) !temp_clause then
+        resolution := (!lit, !cause_cl);
       decr i
     done;
     !resolution
