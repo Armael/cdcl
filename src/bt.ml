@@ -81,3 +81,7 @@ let pop_n_state bt n =
   for i = 1 to n do
     pop_state bt
   done
+
+let forget bt =
+  bt.depth <- 0;
+  Stack.clear bt.stack

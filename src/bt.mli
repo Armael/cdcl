@@ -20,3 +20,4 @@ val push_state : ('a, 'b, 'c) t -> unit
 val pop_state : ('a, 'b, 'c) t -> unit
 val push_n_state : ('a, 'b, 'c) t -> int -> unit
 val pop_n_state : ('a, 'b, 'c) t -> int -> unit
+val forget : ('a, 'b, 'c) t -> unit

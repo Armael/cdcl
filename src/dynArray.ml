@@ -47,3 +47,8 @@ let push_back a x =
 let shrink a i =
   if i >= Array.length a.contents then raise (Invalid_argument "Dynarray.shrink");
   a.length <- i
+
+let map f a =
+  for i = 0 to a.length - 1 do
+    a.contents.(i) <- f a.contents.(i)
+  done

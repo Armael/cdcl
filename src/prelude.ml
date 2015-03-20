@@ -3,6 +3,11 @@
    array by literals *)
 let aid var = 2 * (abs var - 1) + (if var > 0 then 0 else 1)
 
+let lit_iter nvars f =
+  for i = 1 to nvars do
+    f i; f (-i)
+  done
+
 (* Cowardly exits the program *)
 let die msg =
   Printf.printf "%s\n%!" msg;

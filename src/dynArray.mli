@@ -7,3 +7,4 @@ val get : 'a t -> int -> 'a
 val set : 'a t -> int -> 'a -> unit
 val push_back : 'a t -> 'a -> int
 val shrink : 'a t -> int -> unit
+val map : ('a -> 'a) -> 'a t -> unit

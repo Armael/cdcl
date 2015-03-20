@@ -35,6 +35,9 @@ type state = {
   (* clause_activity *)
   (* increment *)
   (* decay *)
+  mutable restart_limit: int;
+  restart_mult: float;
+  mutable conflicts_counter: int;
   (* restart limit *)
   (* multiplication du restart limite *)
   (* limite du nombre total de clauses apprises *)
@@ -58,15 +61,13 @@ let print_assign st =
 
 (* check that the two wl-related arrays are coherent *)
 let check_watched st =
-  for i = 1 to st.nvars do
-    List.iter (fun i ->
-      let cls = LitArray.get st.clauses_of_wl i in
-      for j = 0 to DynArray.length cls - 1 do
-        let (u, v) = DynArray.get st.wl_of_clause (DynArray.get cls j) in
-        assert (u = i || v = i)
-      done
-    ) [i; -i]
-  done
+  lit_iter st.nvars (fun i ->
+    let cls = LitArray.get st.clauses_of_wl i in
+    for j = 0 to DynArray.length cls - 1 do
+      let (u, v) = DynArray.get st.wl_of_clause (DynArray.get cls j) in
+      assert (u = i || v = i)
+    done
+  )
 
 let print_propagation_log st =
   print_string "Propagation log:";
@@ -149,7 +150,7 @@ let total_assign st =
 
 (******************************************************************************)
 
-(* Main functions: propagation, decision, conflict analysis, main loop ********)
+(* State-handling functions: initialize/reset the state ***********************)
 
 (* Create a state from a cnf formula *)
 let init_state ((nvars, nclauses, clauses): Cnf.t): state =
@@ -190,6 +191,9 @@ let init_state ((nvars, nclauses, clauses): Cnf.t): state =
       lit_activity;
       lit_activity_increment = 1.;
       lit_activity_decay = 1. /. 0.95;
+      restart_limit = 100;
+      restart_mult = 1.5;
+      conflicts_counter = 0;
     }
   in
 
@@ -198,6 +202,37 @@ let init_state ((nvars, nclauses, clauses): Cnf.t): state =
     watch_new_clause st cl_id
   done;
   st
+
+(* Reset the state. Used for restarts *)
+let reset_state st =
+  for i = 1 to st.nvars do
+    (* clear assignations *)
+    Bt.set st.assign i 0
+  done;
+  (* clear the backtrack stack *)
+  Bt.forget st.assign;
+  
+  Queue.clear st.queue;
+  DynArray.shrink st.propagation_log 0;
+  DynArray.shrink st.propagation_bt 0;
+  st.decision_level <- 0;
+  st.conflicting_clause <- -1;
+
+  (* reset literals activities *)
+  lit_iter st.nvars (fun i ->
+    LitArray.set st.lit_activity i 0.
+  );
+
+  (* we reset watching literals because
+     choosing watching literals for a clause
+     may trigger propagation steps we don't want
+     to miss *)
+  DynArray.map (fun _ -> (0, 0)) st.wl_of_clause;
+  lit_iter st.nvars (fun i ->
+    DynArray.shrink (LitArray.get st.clauses_of_wl i) 0
+  )
+
+(* Main functions: propagation, decision, conflict analysis, main loop ********)
 
 (* The propagation function
 
@@ -266,8 +301,6 @@ let rec propagate (st: state): bool =
       in
 
       let cls_of_v = LitArray.get st.clauses_of_wl v in
-
-      Debug.f 1 (fun _ -> check_watched st);
 
       match
         for i = 0 to DynArray.length cls_of_v - 1 do
@@ -425,8 +458,22 @@ let cdcl (st: state): outcome =
   | true ->
     let unsat = ref false in
     while not !unsat && not (total_assign st) do
-      check_watched st;
-      
+      (* Do we restart? *)
+      if st.conflicts_counter >= st.restart_limit then (
+        Debug.p 2 "Restarting\n%!";
+    
+        st.conflicts_counter <- 0;
+        st.restart_limit <- (float_of_int st.restart_limit) *. st.restart_mult
+                            |> int_of_float;
+        (* learnt clauses are now considered part of the initial instance.
+           This info is not used at the moment though (no clause activity/decay) *)
+        st.learnt_clauses_begin <- DynArray.length st.clauses;
+        reset_state st;
+        for cl_id = 0 to DynArray.length st.clauses - 1 do
+          watch_new_clause st cl_id
+        done
+      );
+
       if Queue.is_empty st.queue then (
         let x = pick_branching_variable st in
         Debug.p 2 "DECIDING %d = true\n%!" x;
@@ -441,7 +488,8 @@ let cdcl (st: state): outcome =
       | false ->
         Debug.p 2 "Conflict\n%!";
         Queue.clear st.queue;
-        
+
+        st.conflicts_counter <- st.conflicts_counter + 1;
         let new_clause_id, bt_steps = conflict_analysis st in
         Debug.p 2 "Backtracking of %d steps\n%!" bt_steps;
           
