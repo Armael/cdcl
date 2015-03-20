@@ -462,7 +462,7 @@ let cdcl (st: state): outcome =
           let new_dl = DynArray.length st.propagation_bt - bt_steps in
           let i = DynArray.get st.propagation_bt new_dl in
           DynArray.shrink st.propagation_bt new_dl;
-          DynArray.shrink st.propagation_log (i + 1);
+          DynArray.shrink st.propagation_log i;
           st.decision_level <- st.decision_level - bt_steps;
           Bt.pop_n_state st.assign bt_steps;
 
