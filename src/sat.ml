@@ -33,16 +33,9 @@ type state = {
   lit_activity: float LitArray.t;
   lit_activity_increment: float;
   lit_activity_decay: float;
-  (* clause_activity *)
-  (* increment *)
-  (* decay *)
   mutable restart_limit: int;
   restart_mult: float;
   mutable conflicts_counter: int;
-  (* restart limit *)
-  (* multiplication du restart limite *)
-  (* limite du nombre total de clauses apprises *)
-  (* multiplieur pour la limite du nb de clauses *)
 }
 
 type outcome =
