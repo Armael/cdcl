@@ -1,0 +1,26 @@
+Idées pour debugguer (question perfs) :
+
+- comparer à un autre cdcl : par exemple msat de zozozo et c³ qui est un fork
+  d'aez
+
+- quels benchmarks : zozozo dit que cdcl est plus adapté sur des instances
+  issues d'un problème avec de la structure. kcolor est pas mal par exemple. c³
+  précise que les instances aléatoires sont une catégorie bien à part dans les
+  compétitions de sat-solveurs, donc pas forcément représentatif
+
+- idée: générer une trace d'exécution depuis msat, et l'exécuter dans notre
+  solveur pour voir s'il prend de bonnes décisions, notamment au niveau de
+  l'apprentissage de clauses
+
+- c³ dit : dans une clause apprise, il faut avoir un litéral dedans qui est une
+  décision, les autres litéraux doivent être propagés après ce litéral, et la
+  clause doit être force. Ce qui force le backtrack à la décision en question
+
+- zozozo dit : pour estimer (a posteriori) l'utilité d'une clause, on peut
+  calculer le nombre de propagations qu'elle a forcé, ou bien de manière
+  équivalente le nombre d'analyses de conflit où elle a été utilisée (c'est
+  d'ailleurs cette notion d'activité qui est utilisée pour déterminer quelles
+  clauses oublier)
+
+- @suppression de clauses apprises par activity decay : (zozozo) c'est surtout
+  utile quand on veut faire du SAT sur de très grosses instances
