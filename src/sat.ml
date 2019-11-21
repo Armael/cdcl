@@ -278,26 +278,30 @@ let rec propagate (st: state): bool =
           true
         ) else (
           Debug.f 2 (fun _ -> print_assign st);
-          match discriminate st (DynArray.get st.clauses cl_id) with
-          | ([], [], _) -> (* conflit *)
-            st.conflicting_clause <- cl_id;
-            false
-          | ([], _, _) -> assert false
-          | ([x], [], _) ->
+          let cl = DynArray.get st.clauses cl_id in
+          let all_false = ref false in
+          let exception Watched_found of int in
+          try
+            for i = 0 to Array.length cl - 1 do
+              let w = cl.(i) in
+              match Bt.get st.assign w with
+              | -1 -> ()
+              | 0 -> if w = v' then (all_false := true) else raise (Watched_found w)
+              | _ (* 1 *) -> raise (Watched_found w)
+            done;
+            if !all_false then (
             Queue.add (v', cl_id) st.queue;
             (* We continue to watch v; there is no better candidate, and v'
                should be set to true by the incoming propagation *)
             DynArray.push_back clauses_of_v cl_id |> ignore;
             true
-          | ([x], l, _) ->
-            let new_v = most_recent st l in
-            DynArray.set st.wl_of_clause cl_id (new_v, v');
-            DynArray.push_back (LitArray.get st.clauses_of_wl new_v) cl_id |> ignore;
-            true
-          | (l, _, _) ->
-            let new_v = List.find ((<>) v') l in
-            DynArray.set st.wl_of_clause cl_id (new_v, v');
-            DynArray.push_back (LitArray.get st.clauses_of_wl new_v) cl_id |> ignore;
+            ) else (
+              st.conflicting_clause <- cl_id;
+              false
+            )
+          with Watched_found w ->
+            DynArray.set st.wl_of_clause cl_id (w, v');
+            DynArray.push_back (LitArray.get st.clauses_of_wl w) cl_id |> ignore;
             true
         )
       in
